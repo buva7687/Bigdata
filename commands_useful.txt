@@ -1,0 +1,16 @@
+hadoop dfsadmin -safemode get--to get the status
+
+hadoop dfsadmin -safemode enter--to enter in safe mode
+
+hadoop dfsadmin -safemode leave --to leave safe mode
+
+hadoop namenode -format
+
+hadoop fsck /user/training/shakespear -files -blocks -locations
+
+
+hadoop fs -getmerge /user/training/shakespear  localpath/shakes
+
+TO SEE THE version
+
+/home/training/hadoop-temp/dfs/data/current

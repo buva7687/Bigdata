@@ -1,0 +1,5 @@
+hadoop jar sample1.jar AverageWordLengthDriver -D mapred.reduce.tasks=10 /shakespeare/poems poemcount
+
+cd hd_workspace
+
+hadoop jar /home/training/hd_workspace/WordCoutnInFile/wordcountinfile.jar WordCountInFileDriver    shakespeare/poems poemcountsg

@@ -1,0 +1,82 @@
+hadoop jar sampleStudent.jar AverageWordLengthDriver shakespeare/poems stHadoopOut
+
+
+hadoop jar test.jar AverageWordLengthDriver shakespeare/poems stHadoopOut2
+
+
+
+
+
+--------------hive------------------------
+
+1-create table mytest(name STRING); on hive prompt
+
+2-create file name on desktop and enter few names  
+
+3-hadoop fs -put /home/training/Desktop/name name  on hadoop terminal;
+
+4-LOAD DATA INPATH "name" INTO mytest;
+
+5-to copy from local system to hive table
+
+LOAD DATA local INPATH "/home/training/Desktop/name" INTO table  myname;
+
+6-
+create table sample (firstname string,lastname string,id int)
+ROW FORMAT
+DELIMITED FIELDS
+TERMINATED BY ',';
+
+7-LOAD DATA local INPATH "/home/training/Desktop/namekey" INTO table  sample;
+
+create table namekey(firstname string,id int)
+ROW FORMAT
+DELIMITED FIELDS
+TERMINATED BY ',';
+
+create table lockey(id int,country string)
+ROW FORMAT
+DELIMITED FIELDS
+TERMINATED BY ',';
+
+
+select namekey.firstname,lockey.country
+from namekey join lockey
+on (namekey .id=lockey.id);
+
+
+
+en,yahoo,12,1456
+en,google,13,234
+aa.b,fb,13,1453
+dd,rediff,14,1897
+
+create table wiki_tab(project string,search_engine string,pagecount int,pagesize int)
+ROW FORMAT
+DELIMITED FIELDS
+TERMINATED BY ',';
+
+
+
+LOAD DATA local INPATH "/home/training/Desktop/wiki" INTO table  wiki_tab;
+
+
+
+sqoop----------
+
+
+./sqoop export --connect jdbc:mysql://localhost/test --table rbigdata --export-dir data
+
+
+./sqoop import --connect jdbc:mysql://localhost/test --table rbigdata --m 1
+
+
+larger:10K after:2006/7/2 before:2008/7/3
+
+
+
+
+
+
+
+
