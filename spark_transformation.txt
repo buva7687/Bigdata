@@ -1,0 +1,267 @@
+******Transformation*************
+
+
+
+*****************get total of sales for order_id 2**************
+spark-shell --master local[2] -- num-executor 2 --executor-memory 512 --spark.ui.port=4041
+
+var order_items_rdd=sc.textFile("/user/training/data/retail_db/order_items/part-00000")
+
+****filter**********
+var order_items_filter=order_items_rdd.filter(x=>(x.split(",")(1).toInt==2 || x.split(",")(1).toInt==4))
+
+****reducyByKey and Map**********
+
+var order_itemtotal=order_items_filter.map(x=>(x.split(",")(1).toInt,x.split(",")(4).toFloat)).reduceByKey((a,b)=>a+b)
+order_itemtotal.take(5).foreach(println)
+
+--to round
+var order_itemtotal=order_items_filter.map(x=>(x.split(",")(1).toInt,x.split(",")(4).toFloat.round)).reduceByKey((a,b)=>a+b)
+order_itemtotal.take(5).foreach(println)
+
+--count
+order_itemtotal.count
+
+
+************Join*********************
+
+**Join RDD
+var orders_rdd=sc.textFile("/user/training/data/retail_db/orders")
+var orders=orders_rdd.map(x=>{var d=x.split(",");(d(0).toInt,x)})
+
+var order_items_rdd=sc.textFile("/user/training/data/retail_db/order_items")
+var order_items=order_items_rdd.map(x=>{var d=x.split(",");(d(1).toInt,x)})
+
+var order_joined=orders.join(order_items)
+
+
+**Join Dframe
+
+
+var orders_rdd=sc.textFile("/user/training/data/retail_db/orders")
+var orders_df=orders_rdd.map(x=>{var d=x.split(",");(d(0).toInt,d(1),d(2).toInt,d(3))}).toDF("order_id","order_date","order_customer_id","order_status")
+
+var order_items_rdd=sc.textFile("/user/training/data/retail_db/order_items")
+var order_items_df=order_items_rdd.map(x=>{var d=x.split(",");(d(0).toInt,d(1).toInt,d(2).toInt,d(3).toInt,d(4).toFloat,d(5).toFloat)}).toDF("order_item_id","order_item_order_id","order_item_product_id","order_item_quantity","order_item_subtotal","order_item_product_price")
+
+var order_joined=orders_df.join(order_items_df,orders_df("order_id")===order_items_df("order_item_order_id"))
+
+
+Example: to find inactive customer
+
+var orders_rdd=sc.textFile("/user/training/data/retail_db/orders")
+var orders=orders_rdd.map(x=>{var d=x.split(",");(d(2).toInt,d(0).toInt)})
+
+
+val customers_raw = Source.fromFile("/home/training/data/retail_db/customers/part-00000").getLines.toList;
+
+val customers_rdd = sc.parallelize(customers_raw)
+
+val customers = customers_rdd.map(customer => (customer.split(",")(0).toInt,(customer.split(",")(1),customer.split(",")(2))))
+
+val customers_ord_join = customers.leftOuterJoin(orders)
+
+val inactive_customers =  customers_ord_join.filter(rec => rec._2._2 == None).map(re => re._2).sortByKey();
+
+val inactive_customer_names=inactive_customers.map(x=>x._1._1+"\t"+x._1._2)
+
+val inactive_customer_names=inactive_customers.map(rec => rec._1._1+ ", "+ rec._1._2).saveAsTextFile("/user/training/solutions/soultions00002/Inactive_customers");
+
+***set operator
+
+--Intersection
+// Get all the customers who placed orders in 2013 August and 2013 September
+var orders_rdd=sc.textFile("/user/training/data/retail_db/orders")
+
+var customers_082013=orders_rdd.filter(x=>x.split(",")(1).contains("2013-08")).map(x=>x.split(",")(2))
+
+var customers_092013=orders_rdd.filter(x=>x.split(",")(1).contains("2013-09")).map(x=>x.split(",")(2))
+
+var customer_08_09_2013=customers_082013.intersection(customers_092013)
+
+customer_08_09_2013.take(10).foreach(println)
+
+--Union
+// Get all unique customers who placed orders in 2013 August or 2013 September
+
+var customer_08_09_2013=customers_082013.union(customers_092013).distinct
+
+customer_08_09_2013.take(10).foreach(println)
+
+
+
+// Get all customers who placed orders in 2013 August but not in 2013 September
+
+
+var customer_08_not_09_2013=customers_082013.map(c=>(c,1)).leftOuterJoin(customers_092013.map(c=>(c,1)))
+var customers_not_in_09=customer_08_not_09_2013.filter(x=>(x._2._2==None)).map(x=>x._1).distinct
+
+
+**********word count***********
+
+var words_rdd=sc.textFile("/user/training/words/words_file.txt")
+
+var words_rdd=sc.textFile("/user/training/words/words_file.txt")
+var words_flat=words_rdd.flatMap(x=>x.split(" "))
+var words_map=words_flat.map(word=>(word,1))
+var word_count=words_map.reduceByKey((a,b)=>a+b)
+var word_count_df=word_count.toDF("word","count")
+
+//save as avro
+
+import com.databricks.spark.avro._
+word_count_df.write.avro("/user/training/word_count_avro")
+
+//save as textfile
+
+word_count_df.rdd.map(x=>(x.mkString("\t"))).saveAsTextFile("/user/training/word_count_txt")
+
+word_count_df.map(x=>( x(0)+"\t"+x(1) )).saveAsTextFile("/user/training/word_count_txt_map")
+
+
+*********change number of partition to reduce task************
+
+sqlContext.setConf("spark.sql.shuffle.partitions", "1")
+
+
+
+
+//Get top 3 crime types based on number of incidents in RESIDENCE area using Location Description
+//Delimiter use regex while splitting split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1), as there are some fields with comma and enclosed using double quotes
+//data is available at /user/training/CRIME_DATA/Crimes.csv
+//Structure of data (ID,Case Number,Date,Block,IUCR,Primary Type,Description,Location Description,Arrest,Domestic,Beat,District,Ward,Community Area,FBI Code,X Coordinate,Y Coordinate,Year,Updated On,Latitude,Longitude,Location)
+//File format - text file
+
+
+var crimes_rdd=sc.textFile("/user/training/CRIME_DATA/Crimes.csv")
+var header=crimes_rdd.first
+var crimeDataWithoutHeader=crimes_rdd.filter(crimerec=>crimerec!=header)
+
+var crimeDataWithoutHeaderDF=crimeDataWithoutHeader.map(x=>{var r=x.split(",(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)", -1);(r(7),r(5))}).toDF("location_description","crime_type")
+
+
+crimeDataWithoutHeaderDF.registerTempTable("CRIME_DATA")
+
+val resultSQL =sqlContext.sql("select crime_type,count(1) as crime_count from crime_data where location_description = 'RESIDENCE' group by crime_type order by crime_count desc limit 3 ")
+
+
+resultSQL.toJSON.repartition(1).saveAsTextFile("/user/training/RESIDENCE_AREA_CRIMINAL_TYPE_DATA_json")
+
+resultSQL.write.json("/user/training/RESIDENCE_AREA_CRIMINAL_TYPE_DATA_json2")
+
+resultSQL.toJSON.repartition(1).saveAsTextFile("/user/training/RESIDENCE_AREA_CRIMINAL_TYPE_DATA_json1")
+
+
+
+***********analytical and windowing function********************
+
+var orders_rdd=sc.textFile("/user/training/data/retail_db/orders")
+
+var orders_df=orders_rdd.map(x=>{var d=x.split(",");(d(0).toInt,d(1),d(2).toInt,d(3))}).toDF("order_id","order_date","order_customer_id","order_status")
+
+orders_df.registerTempTable("orders")
+
+var orders_items_rdd=sc.textFile("/user/training/data/retail_db/order_items")
+
+var order_items_df=order_items_rdd.map(x=>{var d=x.split(",");(d(0).toInt,d(1).toInt,d(2).toInt,d(3).toInt,d(4).toFloat,d(5).toFloat)}).toDF("order_item_id","order_item_order_id","order_item_product_id","order_item_quantity","order_item_subtotal","order_item_product_price")
+
+order_items_df.registerTempTable("order_items")
+
+
+
+//get order_id,order_date,order_status,order_item_subtotal,order_revenue per order,pct_revenue per order,avg revenue per order 
+//for orders having order revenue of more than 1000
+
+
+
+var sqlresult=sqlContext.sql("select * from(select o.order_id,o.order_date,o.order_status,oi.order_item_subtotal, " +
+"round(sum(oi.order_item_subtotal) over (partition by o.order_id),2)order_revenue, " +
+"oi.order_item_subtotal/round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) pct_revenue, "+
+"round(avg(oi.order_item_subtotal) over (partition by o.order_id), 2) avg_revenue from orders o join order_items oi "+
+"on o.order_id = oi.order_item_order_id "+
+"where o.order_status in ('COMPLETE', 'CLOSED')) q "+
+"where order_revenue >= 1000 " +
+"order by order_date, order_revenue desc, pct_revenue")
+
+
+
+
+var sqlresult_analytic =sqlContext.sql("select * from(select o.order_id,o.order_date,o.order_status,oi.order_item_subtotal, " +
+"round(sum(oi.order_item_subtotal) over (partition by o.order_id),2)order_revenue, " +
+"oi.order_item_subtotal/round(sum(oi.order_item_subtotal) over (partition by o.order_id), 2) pct_revenue, "+
+"round(avg(oi.order_item_subtotal) over (partition by o.order_id), 2) avg_revenue, "+
+"rank() over (partition by o.order_id order by oi.order_item_subtotal desc) rnk_revenue, "+
+"dense_rank() over (partition by o.order_id order by oi.order_item_subtotal desc) dense_rnk_revenue, "+
+"percent_rank() over (partition by o.order_id order by oi.order_item_subtotal desc) pct_rnk_revenue, "+
+"row_number() over (partition by o.order_id order by oi.order_item_subtotal desc) rn_orderby_revenue, "+
+"row_number() over (partition by o.order_id) rn_revenue "+
+"from orders o join order_items oi "+
+"on o.order_id = oi.order_item_order_id "+
+"where o.order_status in ('COMPLETE', 'CLOSED')) q "+
+"where order_revenue >= 1000 " +
+"order by order_date, order_revenue desc, rnk_revenue")
+
+
+//result can be save in diffrent file format using df.write.fileformat methods
+
+
+
+///substr and replace
+
+val orders=sc.textFile("/user/training/data/retail_db/orders")
+val orderdate=orders.map(order=>order.split(",")(1).substring(0,10).replace("-","/"))
+
+scala> orderdate.distinct.take(5).foreach(println)
+2014/04/01                                                                      
+2014/02/23
+2013/12/21
+2014/03/24
+2014/03/15
+
+
+***********GroupByKey*******************8
+
+val orderitems=sc.textFile("/user/training/data/retail_db/order_items")
+
+val orderItemsMap = orderitems.map(oi => (oi.split(",")(1).toInt, oi.split(",")(4).toFloat))
+
+orderItemsMap.first
+val orderItemsGBK = orderItemsMap.groupByKey
+
+ orderItemsGBK.map(rec => (rec._1, rec._2.toList.sum)).take(10).foreach(println)
+
+*********sortByKey*****************
+
+val products = sc.textFile("/user/training/data/retail_db/products")
+val productmap = products.map(product => (product.split(",")(1),product))
+val sortedproduct = productmap.sortByKey()
+val sortedproduct = productmap.sortByKey(false)
+
+//details of top 10 products)
+
+val products = sc.textFile("/user/training/data/retail_db/products")
+val productmap = products.map(product => (product.split(",")(4),product))
+val sortedproduct = productmap.sortByKey(false)
+sortedproduct.take(5).foreach(println)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
